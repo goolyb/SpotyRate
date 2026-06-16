@@ -1,4 +1,4 @@
-# 🎧 SpotyRate
+# 🎧 SpotyRate https://goolyb.github.io/SpotyRate
 
 A tiny, offline web app that **rates your Spotify playlist** and shows its stats — grade, sound profile, top artists & genres, decades, and record tracks. All processing happens in your browser; nothing is uploaded anywhere.
 
