@@ -25,23 +25,36 @@
     <div class="dz-sub">или</div>
     <label class="btn">
       Выбрать файл
-      <input type="file" id="fileInput" accept=".csv,text/csv" hidden>
+      <input type="file" id="fileInput" accept=".csv,.txt,text/csv,text/plain" hidden>
     </label>
     <div class="dz-err" id="dzErr"></div>
   </div>
 
   <h2>Где взять CSV своего плейлиста</h2>
   <div class="panel guide">
+    <p><b>Spotify</b> — через Exportify (даёт аудио-фичи для полной оценки):</p>
     <ol>
       <li>Открой <a href="https://exportify.net/" target="_blank" rel="noopener">exportify.net</a> и нажми <b>Get Started</b> / <b>Log in with Spotify</b>.</li>
       <li>Разреши доступ — Exportify покажет список твоих плейлистов.</li>
       <li>Напротив нужного плейлиста нажми кнопку <b>Export</b> (значок скачивания).</li>
       <li>Скачается <code>.csv</code> файл — его и загрузи сюда выше. 🎉</li>
     </ol>
+
+    <p style="margin-top:18px"><b>Apple Music, YouTube Music, SoundCloud</b> и другие — через конвертер плейлистов:</p>
+    <ol>
+      <li>Открой <a href="https://soundiiz.com/" target="_blank" rel="noopener">Soundiiz</a> или <a href="https://www.tunemymusic.com/" target="_blank" rel="noopener">TuneMyMusic</a> и подключи свой сервис.</li>
+      <li>Выбери плейлист и в качестве назначения укажи экспорт в <b>CSV / файл</b>.</li>
+      <li>Скачай <code>.csv</code> и загрузи его сюда. Формат определится автоматически.</li>
+    </ol>
+    <div class="note">
+      Подойдёт и нативный экспорт: <b>YouTube Music</b> — через <a href="https://takeout.google.com/" target="_blank" rel="noopener">Google Takeout</a>;
+      <b>Apple Music</b> — в приложении «Музыка»: <i>Файл → Медиатека → Экспортировать плейлист…</i>
+    </div>
+    <div class="note">У всех сервисов кроме Spotify нет аудио-фич — оценка считается по популярности и разнообразию.</div>
     <div class="note">Ничего никуда не отправляется: файл читается прямо в твоём браузере.</div>
   </div>
 
-  <div class="foot">Аудио-данные берутся из экспорта Spotify · работает офлайн</div>
+  <div class="foot">Spotify, Apple Music, YouTube Music, SoundCloud и др. · работает офлайн</div>
 </div>
 
 <!-- ЭКРАН РЕЗУЛЬТАТА -->

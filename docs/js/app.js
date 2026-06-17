@@ -2,9 +2,15 @@
    Никаких данных не вшито: пользователь загружает свой файл. */
 
 // ---------------------------------------------------------------- CSV parser
-// Поддерживает кавычки, запятые и переносы строк внутри полей.
+// Поддерживает кавычки, переносы строк внутри полей и авто-разделитель (запятая/таб).
+// Таб-разделитель нужен для нативного экспорта медиатеки Apple Music (.txt).
+function detectDelim(text){
+  const nl=text.indexOf('\n'); const head=nl<0?text:text.slice(0,nl);
+  return (head.split('\t').length-1) > (head.split(',').length-1) ? '\t' : ',';
+}
 function parseCSV(text){
   if(text.charCodeAt(0)===0xFEFF) text=text.slice(1); // BOM
+  const delim=detectDelim(text);
   const rows=[]; let row=[], field='', i=0, inQ=false;
   while(i<text.length){
     const c=text[i];
@@ -13,7 +19,7 @@ function parseCSV(text){
       field+=c;i++;continue;
     }
     if(c==='"'){inQ=true;i++;continue;}
-    if(c===','){row.push(field);field='';i++;continue;}
+    if(c===delim){row.push(field);field='';i++;continue;}
     if(c==='\r'){i++;continue;}
     if(c==='\n'){row.push(field);rows.push(row);row=[];field='';i++;continue;}
     field+=c;i++;
@@ -24,22 +30,63 @@ function parseCSV(text){
 
 const num=(x)=>{const n=parseFloat(x);return isNaN(n)?null:n;};
 
+// Длительность из разных форматов → миллисекунды.
+// Spotify: «Duration (ms)»; Apple Music «Time» / Soundiiz «Duration»: секунды или мм:сс.
+function parseDur(raw, header){
+  if(raw==null) return null;
+  const s=String(raw).trim(); if(!s) return null;
+  if(s.includes(':')){                                   // мм:сс или ч:мм:сс
+    const p=s.split(':').map(Number); if(p.some(isNaN)) return null;
+    return p.reduce((a,x)=>a*60+x,0)*1000;
+  }
+  const n=parseFloat(s); if(isNaN(n)) return null;
+  if(/\(ms\)/i.test(header) || n>10000) return n;        // уже миллисекунды
+  return n*1000;                                         // секунды → мс
+}
+
+// Колонки разных сервисов называются по-разному — сопоставляем по списку синонимов.
+// Покрывает Spotify (Exportify), Apple Music, YouTube Music, SoundCloud и
+// универсальные экспорты Soundiiz / TuneMyMusic.
+const ALIASES={
+  name:['track name','title','name','song title','song','track'],
+  artist:['artist name(s)','artist','artists','artist name','artist(s)'],
+  album:['album name','album','album title'],
+  date:['release date','release year','year','date','released'],
+  dur:['duration (ms)','duration','time','length','duration (s)'],
+  pop:['popularity'],
+  explicit:['explicit'],
+  genres:['genres','genre'],
+  dance:['danceability'], energy:['energy'], loud:['loudness'],
+  speech:['speechiness'], acoust:['acousticness'], instr:['instrumentalness'],
+  live:['liveness'], val:['valence'], tempo:['tempo'],
+};
+
+// По заголовкам понимаем, из какого сервиса экспорт (для подписи в результатах).
+function detectSource(low){
+  const has=(n)=>low.indexOf(n)>=0;
+  if(has('track name') && has('artist name(s)')) return 'Spotify (Exportify)';
+  if(has('plays') || has('album artist')) return 'Apple Music';
+  return 'CSV (Apple Music / YouTube Music / SoundCloud и др.)';
+}
+
+let SOURCE='';   // подпись определённого формата, показывается в подвале результата
+
 // Превращаем строки CSV в объекты треков по именам колонок (терпимо к отсутствующим).
 function toTracks(rows){
   if(!rows.length) throw new Error('Файл пустой.');
   const head=rows[0].map(h=>h.trim());
-  const idx=(name)=>head.indexOf(name);
-  const need=['Track Name','Artist Name(s)'];
-  if(need.some(n=>idx(n)<0))
-    throw new Error('Это не похоже на экспорт плейлиста из Exportify (нет колонок Track Name / Artist Name(s)).');
-  const col={
-    name:idx('Track Name'), artist:idx('Artist Name(s)'), album:idx('Album Name'),
-    date:idx('Release Date'), dur:idx('Duration (ms)'), pop:idx('Popularity'),
-    explicit:idx('Explicit'), genres:idx('Genres'),
-    dance:idx('Danceability'), energy:idx('Energy'), loud:idx('Loudness'),
-    speech:idx('Speechiness'), acoust:idx('Acousticness'), instr:idx('Instrumentalness'),
-    live:idx('Liveness'), val:idx('Valence'), tempo:idx('Tempo'),
-  };
+  const low=head.map(h=>h.toLowerCase());
+  // для каждого поля берём первый заголовок-синоним, который встретился
+  const col={}, colHead={};
+  for(const key in ALIASES){
+    let found=-1;
+    for(const a of ALIASES[key]){ const i=low.indexOf(a); if(i>=0){found=i;break;} }
+    col[key]=found; colHead[key]=found>=0?head[found]:'';
+  }
+  if(col.name<0 || col.artist<0)
+    throw new Error('Не нашёл колонки с названием трека и артистом. Подойдёт CSV из Exportify (Spotify), Soundiiz или TuneMyMusic — с колонками вида Title / Artist.');
+  SOURCE=detectSource(low);
+
   const get=(r,i)=>i>=0?(r[i]||''):'';
   const out=[];
   for(let k=1;k<rows.length;k++){
@@ -48,7 +95,7 @@ function toTracks(rows){
     if(get(r,col.name)==='' && get(r,col.artist)==='') continue;
     out.push({
       name:get(r,col.name), artist:get(r,col.artist), album:get(r,col.album),
-      date:get(r,col.date), dur:num(get(r,col.dur)), pop:num(get(r,col.pop)),
+      date:get(r,col.date), dur:parseDur(get(r,col.dur),colHead.dur), pop:num(get(r,col.pop)),
       explicit:get(r,col.explicit).toLowerCase()==='true', genres:get(r,col.genres),
       dance:num(get(r,col.dance)), energy:num(get(r,col.energy)), loud:num(get(r,col.loud)),
       speech:num(get(r,col.speech)), acoust:num(get(r,col.acoust)), instr:num(get(r,col.instr)),
@@ -186,9 +233,10 @@ function render(DATA){
     $('ptitle').textContent='Твой плейлист';
   }
 
+  const src = SOURCE ? ' · источник: '+SOURCE : '';
   $('resfoot').textContent = hasFeat
-    ? 'Оценка считается формулой в браузере · аудио-данные Spotify'
-    : 'В этом экспорте нет аудио-фич — оценка по популярности и разнообразию';
+    ? 'Оценка считается формулой в браузере · аудио-данные Spotify'+src
+    : 'В этом экспорте нет аудио-фич — оценка по популярности и разнообразию'+src;
 
   setupReveal();
 }
@@ -219,8 +267,8 @@ function setupReveal(){
 function handleFile(file){
   const err=$('dzErr'); err.textContent='';
   if(!file){return;}
-  if(!/\.csv$/i.test(file.name) && file.type!=='text/csv'){
-    err.textContent='Нужен файл .csv'; return;
+  if(!/\.(csv|txt)$/i.test(file.name) && !/^text\/(csv|plain)$/.test(file.type)){
+    err.textContent='Нужен файл .csv или .txt'; return;
   }
   const reader=new FileReader();
   reader.onload=()=>{
